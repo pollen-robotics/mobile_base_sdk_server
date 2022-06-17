@@ -18,8 +18,6 @@ from zuuu_interfaces.srv import SetZuuuMode, GetZuuuMode, GetOdometry, ResetOdom
 from zuuu_interfaces.srv import GoToXYTheta, IsGoToFinished, DistanceToGoal
 from zuuu_interfaces.srv import SetSpeed, GetBatteryVoltage
 
-from zuuu_follow_me.config import is_zuuu_in_config
-
 
 class MobileBaseServer(
                         Node,
