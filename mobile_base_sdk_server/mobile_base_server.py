@@ -65,10 +65,6 @@ class MobileBaseServer(
         while not self.reset_odometry_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service ResetOdometry not available, waiting again...')
 
-        self.get_reachy_model_client = self.create_client(GetReachyModel, 'get_reachy_model')
-        while not self.get_reachy_model_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('service GetReachyModel not available, waiting again...')
-
         self.logger.info('Initialized mobile base server.')
 
     def SendDirection(
@@ -245,20 +241,12 @@ class MobileBaseServer(
         presence = False
         version = '0.0'
 
-        req = GetReachyModel.Request()
-        future = self.get_reachy_model_client.call_async(req)
-        for _ in range(1000):
-            if future.done():
-                model = future.result()
-                print(model)
-                break
-            time.sleep(0.001)
+        model = check_output(['reachy-identify-zuuu-model']).strip().decode()
 
         if model and model != 'None':
             presence = True
-            version = float(model.zuuu_model)
+            version = float(model)
 
-        print(presence, version)
         response = mobile_platform_reachy_pb2.MobileBasePresence(
             presence=BoolValue(value=presence),
             model_version=FloatValue(value=version),
