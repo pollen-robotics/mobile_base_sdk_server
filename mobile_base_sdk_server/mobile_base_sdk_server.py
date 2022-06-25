@@ -1,4 +1,5 @@
-from tabnanny import check
+"""Expose main mobile base ROS services/topics through gRPC allowing remote client SDK."""
+
 import time
 from subprocess import run, PIPE, check_output
 from concurrent.futures import ThreadPoolExecutor
@@ -9,13 +10,11 @@ from google.protobuf.wrappers_pb2 import BoolValue, FloatValue
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from rclpy.parameter import Parameter
 
 from reachy_sdk_api import mobile_platform_reachy_pb2, mobile_platform_reachy_pb2_grpc
-from reachy_msgs.srv import GetReachyModel
 
 from zuuu_interfaces.srv import SetZuuuMode, GetZuuuMode, GetOdometry, ResetOdometry
-from zuuu_interfaces.srv import GoToXYTheta, IsGoToFinished, DistanceToGoal
+from zuuu_interfaces.srv import GoToXYTheta, DistanceToGoal
 from zuuu_interfaces.srv import SetSpeed, GetBatteryVoltage
 
 
@@ -24,8 +23,15 @@ class MobileBaseServer(
                         mobile_platform_reachy_pb2_grpc.MobileBasePresenceServiceServicer,
                         mobile_platform_reachy_pb2_grpc.MobilityServiceServicer,
                         ):
+    """Mobile base SDK server node."""
 
     def __init__(self, node_name: str) -> None:
+        """Set up the node.
+
+        Get mobile base basic info such as its odometry, battery level, drive mode or control mode
+        from the mobile base hal.
+        Send commands through the GoToXYTheta or SetSpeed services or by publishing to cmd_vel topic.
+        """
         super().__init__(node_name=node_name)
         self.logger = self.get_logger()
 
@@ -71,7 +77,7 @@ class MobileBaseServer(
                     self,
                     request: mobile_platform_reachy_pb2.TargetDirectionCommand,
                     context) -> mobile_platform_reachy_pb2.TargetDirectionCommandAck:
-        """Send a speed command for the mobile base expressed in SI units """
+        """Send a speed command for the mobile base expressed in SI units."""
         twist = Twist()
         twist.linear.x = request.direction.x.value
         twist.linear.y = request.direction.y.value
@@ -87,6 +93,7 @@ class MobileBaseServer(
                     self,
                     request: mobile_platform_reachy_pb2.SetSpeedVector,
                     context) -> mobile_platform_reachy_pb2.SetSpeedAck:
+        """Send a speed command for the mobile base expressed in SI units for a given duration."""
         req = SetSpeed.Request()
         req.duration = request.duration.value
         req.x_vel = request.x_vel.value
@@ -100,6 +107,11 @@ class MobileBaseServer(
                 self,
                 request: mobile_platform_reachy_pb2.GoToVector,
                 context) -> mobile_platform_reachy_pb2.GoToAck:
+        """Send a target to the mobile base in the odom frame.
+
+        The origin of the frame is initialised when the hal is started or whenever the odometry
+        is reset. x and y are in meters and theta in radian.
+        """
         req = GoToXYTheta.Request()
         req.x_goal = request.x_goal.value
         req.y_goal = request.y_goal.value
@@ -109,6 +121,10 @@ class MobileBaseServer(
         return mobile_platform_reachy_pb2.GoToAck(success=BoolValue(value=True))
 
     def DistanceToGoal(self, request, context):
+        """Return the distance left to reach the last goto target sent.
+
+        The remaining x, y and theta to get to the target are also returned.
+        """
         response = mobile_platform_reachy_pb2.DistanceToGoalVector(
             delta_x=FloatValue(value=0.0),
             delta_y=FloatValue(value=0.0),
@@ -134,7 +150,10 @@ class MobileBaseServer(
                     self,
                     request: mobile_platform_reachy_pb2.ControlModeCommand,
                     context) -> mobile_platform_reachy_pb2.ControlModeCommandAck:
+        """Set mobile base control mode.
 
+        Two valid control modes are available: OPEN_LOOP and PID.
+        """
         mode = mobile_platform_reachy_pb2.ControlModePossiblities.keys()[request.mode]
 
         if mode == 'NONE_CONTROL_MODE':
@@ -147,7 +166,7 @@ class MobileBaseServer(
                     self,
                     request: Empty,
                     context) -> mobile_platform_reachy_pb2.ControlModeCommand:
-
+        """Get mobile base control mode."""
         output = check_output(['ros2', 'param', 'get', '/zuuu_hal', 'control_mode']).decode()
 
         # Response from ros2 looks like: "String value is: MODE"
@@ -160,6 +179,10 @@ class MobileBaseServer(
                 self,
                 request: mobile_platform_reachy_pb2.ZuuuModeCommand,
                 context) -> mobile_platform_reachy_pb2.ZuuuModeCommandAck:
+        """Set mobile base drive mode.
+
+        Six valid drive modes are available: CMD_VEL, BRAKE, FREE_WHEEL, SPEED, GOTO, EMERGENCY_STOP.
+        """
         mode = mobile_platform_reachy_pb2.ZuuuModePossiblities.keys()[request.mode]
 
         if mode == 'NONE_ZUUU_MODE':
@@ -174,7 +197,7 @@ class MobileBaseServer(
                     self,
                     request: Empty,
                     context) -> mobile_platform_reachy_pb2.ZuuuModeCommand:
-
+        """Get mobile base drive mode."""
         req = GetZuuuMode.Request()
 
         future = self.get_zuuu_mode_client.call_async(req)
@@ -190,6 +213,7 @@ class MobileBaseServer(
                 self,
                 request: Empty,
                 context) -> mobile_platform_reachy_pb2.BatteryLevel:
+        """Get mobile base battery level in Volt."""
         req = GetBatteryVoltage.Request()
 
         response = mobile_platform_reachy_pb2.BatteryLevel(
@@ -209,12 +233,17 @@ class MobileBaseServer(
                 self,
                 request: Empty,
                 context) -> mobile_platform_reachy_pb2.OdometryVector:
+        """Get mobile base odometry.
+
+        x, y are in meters and theta is in radian.
+        """
         req = GetOdometry.Request()
         response = mobile_platform_reachy_pb2.OdometryVector(
             x=FloatValue(value=0.0),
             y=FloatValue(value=0.0),
             theta=FloatValue(value=0.0),
         )
+
         future = self.get_odometry_client.call_async(req)
         for _ in range(1000):
             if future.done():
@@ -230,6 +259,10 @@ class MobileBaseServer(
                 self,
                 request: Empty,
                 context) -> mobile_platform_reachy_pb2.ResetOdometryAck:
+        """Reset mobile base odometry.
+
+        Current position of the mobile_base is taken as new origin of the odom frame.
+        """
         req = ResetOdometry.Request()
         self.reset_odometry_client.call_async(req)
         return mobile_platform_reachy_pb2.ResetOdometryAck(success=BoolValue(value=True))
@@ -238,6 +271,10 @@ class MobileBaseServer(
                             self,
                             request: Empty,
                             context) -> mobile_platform_reachy_pb2.MobileBasePresence:
+        """Return if a mobile base is in Reachy's config file.
+
+        If yes, return the mobile base version.
+        """
         presence = False
         version = '0.0'
 
@@ -252,6 +289,7 @@ class MobileBaseServer(
             model_version=FloatValue(value=version),
         )
         return response
+
 
 def main():
     """Run the Node and the gRPC server."""
