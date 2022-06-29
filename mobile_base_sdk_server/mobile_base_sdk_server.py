@@ -206,6 +206,10 @@ class MobileBaseServer(
                 mode = future.result().mode
                 break
             time.sleep(0.001)
+        if not future.done():
+            mode = mobile_platform_reachy_pb2.ZuuuModePossiblities.NONE_ZUUU_MODE
+            return mobile_platform_reachy_pb2.ZuuuModeCommand(mode=mode)
+
         mode_grpc = getattr(mobile_platform_reachy_pb2.ZuuuModePossiblities, mode)
         return mobile_platform_reachy_pb2.ZuuuModeCommand(mode=mode_grpc)
 
