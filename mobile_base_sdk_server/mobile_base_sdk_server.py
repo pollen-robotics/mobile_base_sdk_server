@@ -4,6 +4,7 @@ import time
 from subprocess import run, PIPE, check_output
 from concurrent.futures import ThreadPoolExecutor
 from queue import Empty
+
 import grpc
 from google.protobuf.wrappers_pb2 import BoolValue, FloatValue
 
@@ -14,7 +15,7 @@ from geometry_msgs.msg import Twist
 from reachy_sdk_api import mobile_platform_reachy_pb2, mobile_platform_reachy_pb2_grpc
 
 from zuuu_interfaces.srv import SetZuuuMode, GetZuuuMode, GetOdometry, ResetOdometry
-from zuuu_interfaces.srv import GoToXYTheta, DistanceToGoal
+from zuuu_interfaces.srv import GoToXYTheta, DistanceToGoal, SetZuuuSafety
 from zuuu_interfaces.srv import SetSpeed, GetBatteryVoltage
 
 
@@ -71,12 +72,16 @@ class MobileBaseServer(
         while not self.reset_odometry_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service ResetOdometry not available, waiting again...')
 
+        self.set_zuuu_safety = self.create_client(SetZuuuSafety, 'SetZuuuSafety')
+        while not self.reset_odometry_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service ResetOdometry not available, waiting again...')
+
         self.logger.info('Initialized mobile base server.')
 
     def SendDirection(
                     self,
                     request: mobile_platform_reachy_pb2.TargetDirectionCommand,
-                    context) -> mobile_platform_reachy_pb2.TargetDirectionCommandAck:
+                    context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
         """Send a speed command for the mobile base expressed in SI units."""
         twist = Twist()
         twist.linear.x = request.direction.x.value
@@ -87,12 +92,12 @@ class MobileBaseServer(
         twist.angular.z = request.direction.theta.value
         self.cmd_vel_pub.publish(twist)
 
-        return mobile_platform_reachy_pb2.TargetDirectionCommandAck(success=BoolValue(value=True))
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
 
     def SendSetSpeed(
                     self,
                     request: mobile_platform_reachy_pb2.SetSpeedVector,
-                    context) -> mobile_platform_reachy_pb2.SetSpeedAck:
+                    context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
         """Send a speed command for the mobile base expressed in SI units for a given duration."""
         req = SetSpeed.Request()
         req.duration = request.duration.value
@@ -101,12 +106,12 @@ class MobileBaseServer(
         req.rot_vel = request.rot_vel.value
 
         self.set_speed_client.call_async(req)
-        return mobile_platform_reachy_pb2.SetSpeedAck(success=BoolValue(value=True))
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
 
     def SendGoTo(
                 self,
                 request: mobile_platform_reachy_pb2.GoToVector,
-                context) -> mobile_platform_reachy_pb2.GoToAck:
+                context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
         """Send a target to the mobile base in the odom frame.
 
         The origin of the frame is initialised when the hal is started or whenever the odometry
@@ -118,7 +123,7 @@ class MobileBaseServer(
         req.theta_goal = request.theta_goal.value
 
         self.go_to_client.call_async(req)
-        return mobile_platform_reachy_pb2.GoToAck(success=BoolValue(value=True))
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
 
     def DistanceToGoal(self, request, context):
         """Return the distance left to reach the last goto target sent.
@@ -149,7 +154,7 @@ class MobileBaseServer(
     def SetControlMode(
                     self,
                     request: mobile_platform_reachy_pb2.ControlModeCommand,
-                    context) -> mobile_platform_reachy_pb2.ControlModeCommandAck:
+                    context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
         """Set mobile base control mode.
 
         Two valid control modes are available: OPEN_LOOP and PID.
@@ -157,10 +162,10 @@ class MobileBaseServer(
         mode = mobile_platform_reachy_pb2.ControlModePossiblities.keys()[request.mode]
 
         if mode == 'NONE_CONTROL_MODE':
-            return mobile_platform_reachy_pb2.ControlModeCommandAck(success=BoolValue(value=False))
+            return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=False))
 
         run(f'ros2 param set /zuuu_hal control_mode {mode}', stdout=PIPE, shell=True)
-        return mobile_platform_reachy_pb2.ControlModeCommandAck(success=BoolValue(value=True))
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
 
     def GetControlMode(
                     self,
@@ -178,7 +183,7 @@ class MobileBaseServer(
     def SetZuuuMode(
                 self,
                 request: mobile_platform_reachy_pb2.ZuuuModeCommand,
-                context) -> mobile_platform_reachy_pb2.ZuuuModeCommandAck:
+                context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
         """Set mobile base drive mode.
 
         Six valid drive modes are available: CMD_VEL, BRAKE, FREE_WHEEL, SPEED, GOTO, EMERGENCY_STOP.
@@ -186,12 +191,12 @@ class MobileBaseServer(
         mode = mobile_platform_reachy_pb2.ZuuuModePossiblities.keys()[request.mode]
 
         if mode == 'NONE_ZUUU_MODE':
-            return mobile_platform_reachy_pb2.ZuuuModeCommandAck(success=BoolValue(value=False))
+            return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=False))
 
         req = SetZuuuMode.Request()
         req.mode = mode
         self.set_zuuu_mode_client.call_async(req)
-        return mobile_platform_reachy_pb2.ZuuuModeCommandAck(success=BoolValue(value=True))
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
 
     def GetZuuuMode(
                     self,
@@ -262,14 +267,14 @@ class MobileBaseServer(
     def ResetOdometry(
                 self,
                 request: Empty,
-                context) -> mobile_platform_reachy_pb2.ResetOdometryAck:
+                context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
         """Reset mobile base odometry.
 
         Current position of the mobile_base is taken as new origin of the odom frame.
         """
         req = ResetOdometry.Request()
         self.reset_odometry_client.call_async(req)
-        return mobile_platform_reachy_pb2.ResetOdometryAck(success=BoolValue(value=True))
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
 
     def GetMobileBasePresence(
                             self,
@@ -293,6 +298,24 @@ class MobileBaseServer(
             model_version=FloatValue(value=version),
         )
         return response
+
+    def RestartZuuuHal(
+                self,
+                request: Empty,
+                context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
+        """Reset mobile base reachy_mobile_base.service."""
+        run(['systemctl --user restart reachy_mobile_base.service'], stdout=PIPE, shell=True)
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
+
+    def SetZuuuSafety(
+                    self,
+                    request: mobile_platform_reachy_pb2.SetZuuuSafetyRequest,
+                    context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
+        """Set on/off the anti-collision safety handled by the mobile base hal."""
+        req = SetZuuuSafety.Request()
+        req.safety_on = request.safety_on.value
+        self.set_zuuu_safety.call_async(req)
+        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
 
 
 def main():
