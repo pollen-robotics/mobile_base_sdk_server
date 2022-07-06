@@ -299,14 +299,6 @@ class MobileBaseServer(
         )
         return response
 
-    def RestartZuuuHal(
-                self,
-                request: Empty,
-                context) -> mobile_platform_reachy_pb2.MobilityServiceAck:
-        """Reset mobile base reachy_mobile_base.service."""
-        run(['systemctl --user restart reachy_mobile_base.service'], stdout=PIPE, shell=True)
-        return mobile_platform_reachy_pb2.MobilityServiceAck(success=BoolValue(value=True))
-
     def SetZuuuSafety(
                     self,
                     request: mobile_platform_reachy_pb2.SetZuuuSafetyRequest,
