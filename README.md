@@ -41,6 +41,6 @@ colcon build --packages-select mobile_base_sdk_server
 * **run_mobile_base_sdk_server_and_hal.launch.py** - Launch the mobile base's HAL nodes and the mobile_base_sdk_server node.
 
 ---
-This package is part of the ROS2-based software release of the mobile base for Reachy 2021.
+This package is part of the July 2022's ROS2-based software release of the mobile base working with Reachy 2021.
 
 Visit [pollen-robotics.com](https://pollen-robotics.com) to learn more or join our [Dicord community](https://discord.com/invite/Kg3mZHTKgs) if you have any questions or want to share your ideas.
