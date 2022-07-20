@@ -7,7 +7,7 @@ package_name = 'mobile_base_sdk_server'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='0.1.0',
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -17,7 +17,7 @@ setup(
     ],
     install_requires=[
         'setuptools',
-        'reachy_sdk_api>0.6.0',
+        'reachy_sdk_api>=0.6.0',
         ],
     zip_safe=True,
     maintainer='reachy',
