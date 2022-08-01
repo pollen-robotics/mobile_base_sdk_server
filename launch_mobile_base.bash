@@ -2,7 +2,7 @@
 # shellcheck disable=SC1091
 source /opt/ros/foxy/setup.bash
 source $HOME/reachy_ws/install/setup.bash
-source $HOME/reachy_tips/reachy_ros_config
+source $HOME/reachy_tips/config/reachy_ros_config
 
 # Start the ROS2 launch file
 zuuu_model=$(reachy-identify-zuuu-model)
